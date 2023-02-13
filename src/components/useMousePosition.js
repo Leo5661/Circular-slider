@@ -1,28 +1,30 @@
 import { useEffect, useState } from "react";
 
 const useMousePosition = (global = false) => {
-  const [mouseCoords, setMouseCoords] = useState({});
-  const [mouseState, setMouseState] = useState(false);
+ const [mouseCoords, setMouseCoords] = useState({})
+ const [mouseDown, setMouseState] = useState(fal)
 
-  const handleCursorMovement = (event) => {
-    let rect = event.target.getBoundingClientRect();
+ const handleCursorMovement = (event) => {
+ let rect = event.target.getBoundingClientRect();
     setMouseCoords({
       x: event.clientX - rect.left,
-      y: event.clientY - rect.top,
+      y: event.clientY - rect.top
     });
   };
   useEffect(() => {
-    if (global) {
-      window.addEventListener("mousedown", () => setMouseState(!mouseState));
-      window.addEventListener("mouseup", () => setMouseState(!mouseState));
+ if (global) {
+  window.addEventListener("mousedown", () => (mouseDown = true));
+  window.addEventListener("mouseup", () => (mouseDown = false));
 
-      if (mouseState) {
-        window.addEventListener("mousemove", handleCursorMovement);
-      }
+ window.addEventListener("mousemove", handleCursorMovement);
+
+ return () => {
+ window.removeEventListener("mousemove", handleCursorMovement);
+      };
     }
   }, [global]);
 
-  return [mouseCoords, handleCursorMovement];
+ return [mouseCoords, handleCursorMovement];
 };
 
 export default useMousePosition;

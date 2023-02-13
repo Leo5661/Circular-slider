@@ -2,15 +2,14 @@ import React, { useState, useEffect, useRef } from "react";
 import styled from "styled-components";
 import { Chart as ChartJs, ArcElement, Tooltip } from "chart.js";
 import { Doughnut } from "react-chartjs-2";
-import CircularSlider from "@fseehawer/react-circular-slider";
-import useMousePosition from "./useMousePosition";
+import { circleXY, convertPiAngle, isPointerOnKnob } from "../Utils/Utils.js";
 
 ChartJs.register(ArcElement, Tooltip);
 
 function Graph({ data }) {
   const [formData, setFormData] = useState({});
   const canvasRef = useRef(null);
-  const [cord, setCord] = useMousePosition(true);
+
   //graph value's
   const [referralEarningPer, setReferralEarningPer] = useState("10");
   const [dalalEarningPer, setDalalEarningPer] = useState("49");
@@ -22,8 +21,6 @@ function Graph({ data }) {
   const [miscFeesEarning, setMiscFeesEarning] = useState("");
   const [traderEarning, setTraderEarning] = useState("");
 
-  let sliderRadius, slider1XY, slider2XY;
-
   useEffect(() => {
     if (data) {
       setFormData(data);
@@ -33,10 +30,7 @@ function Graph({ data }) {
 
   useEffect(() => {
     const canvas = canvasRef.current;
-
     if (canvas) {
-      console.log("CanvasRenderingContext2D", canvas.ctx);
-      console.log("HTMLCanvasElement", canvas.canvas);
     }
   }, []);
 
@@ -88,27 +82,24 @@ function Graph({ data }) {
     ],
   };
 
-  function circleXY(r, theta) {
-    // Convert angle to radians
-    theta = (theta * Math.PI) / 180;
-
-    return { x: r * Math.cos(theta), y: -r * Math.sin(theta) };
-  }
-
-  function convertPiAngle(angle) {
-    const deg = (angle * 180) / Math.PI;
-    return deg;
-  }
-
   const graphLabels = {
     id: "graphLabels",
+
     afterDraw: (chart, args, options) => {
       const {
         ctx,
         chartArea: { top, bottom, left, right, width, height },
       } = chart;
       ctx.save();
-      let knobRadius;
+
+      let sliderRadius,
+        slider1XY,
+        slider2XY,
+        knobRadius,
+        knob1X,
+        knob1Y,
+        knob2X,
+        knob2Y;
 
       chart.data.datasets.forEach((dataset, i) => {
         chart.getDatasetMeta(i).data.forEach((arc, j) => {
@@ -125,24 +116,80 @@ function Graph({ data }) {
       });
 
       // first slider knob
+      knob1X = left + width / 2 + slider1XY.x;
+      knob1Y = top + height / 2 - slider1XY.y;
       ctx.beginPath();
-      const knob1X = left + width / 2 + slider1XY.x;
-      const knob1Y = top + height / 2 - slider1XY.y;
       ctx.arc(knob1X, knob1Y, knobRadius, 0, 2 * Math.PI);
       ctx.fillStyle = "red";
-      ctx.strokeStyle = "red";
+      ctx.strokeStyle = "grey";
+      ctx.lineWidth = 1;
       ctx.fill();
       ctx.stroke();
+      ctx.closePath();
 
       // second slider knob
+      knob2X = left + width / 2 + slider2XY.x;
+      knob2Y = top + height / 2 - slider2XY.y;
       ctx.beginPath();
-      const knob2X = left + width / 2 + slider2XY.x;
-      const knob2Y = top + height / 2 - slider2XY.y;
       ctx.arc(knob2X, knob2Y, knobRadius, 0, 2 * Math.PI);
       ctx.fillStyle = "red";
-      ctx.strokeStyle = "red";
+      ctx.strokeStyle = "grey";
+      ctx.lineWidth = 1;
       ctx.fill();
       ctx.stroke();
+      ctx.closePath();
+    },
+
+    afterEvent: (chart, args) => {
+      const {
+        ctx,
+        canvas,
+        chartArea: { top, bottom, left, right, width, height },
+      } = chart;
+      ctx.save();
+      let sliderRadius,
+        slider1XY,
+        slider2XY,
+        knobRadius,
+        knob1X,
+        knob1Y,
+        knob2X,
+        knob2Y;
+
+      chart.data.datasets.forEach((dataset, i) => {
+        chart.getDatasetMeta(i).data.forEach((arc, j) => {
+          if (j === 1) {
+            sliderRadius =
+              arc.innerRadius + (arc.outerRadius - arc.innerRadius) / 2;
+
+            knobRadius = (arc.outerRadius - arc.innerRadius) / 2 - 10;
+
+            slider1XY = circleXY(sliderRadius, convertPiAngle(arc.startAngle));
+            slider2XY = circleXY(sliderRadius, convertPiAngle(arc.endAngle));
+          }
+        });
+      });
+
+      // for first slider
+      knob1X = left + width / 2 + slider1XY.x;
+      knob1Y = top + height / 2 - slider1XY.y;
+
+      // for second slider
+      knob2X = left + width / 2 + slider2XY.x;
+      knob2Y = top + height / 2 - slider2XY.y;
+
+      canvas.addEventListener("pointermove", () => {
+        const x = args.event.x;
+        const y = args.event.y;
+
+        if (isPointerOnKnob(x, y, knob1X, knob1Y, knobRadius)) {
+          canvas.style.cursor = "pointer";
+        } else if (isPointerOnKnob(x, y, knob2X, knob2Y, knobRadius)) {
+          canvas.style.cursor = "pointer";
+        } else {
+          canvas.style.cursor = "default";
+        }
+      });
     },
   };
 
@@ -158,6 +205,86 @@ function Graph({ data }) {
     },
   };
 
+  function handelClick(chart) {
+    const {
+      ctx,
+      canvas,
+      chartArea: { top, bottom, left, right, width, height },
+    } = chart;
+
+    console.log(canvas);
+
+    let sliderRadius,
+      slider1XY,
+      slider2XY,
+      knobRadius,
+      knob1X,
+      knob1Y,
+      knob2X,
+      knob2Y;
+
+    chart.data.datasets.forEach((dataset, i) => {
+      chart.getDatasetMeta(i).data.forEach((arc, j) => {
+        if (j === 1) {
+          sliderRadius =
+            arc.innerRadius + (arc.outerRadius - arc.innerRadius) / 2;
+
+          knobRadius = (arc.outerRadius - arc.innerRadius) / 2 - 10;
+
+          slider1XY = circleXY(sliderRadius, convertPiAngle(arc.startAngle));
+          slider2XY = circleXY(sliderRadius, convertPiAngle(arc.endAngle));
+        }
+      });
+    });
+
+    // for first slider
+    knob1X = left + width / 2 + slider1XY.x;
+    knob1Y = top + height / 2 - slider1XY.y;
+
+    // for second slider
+    knob2X = left + width / 2 + slider2XY.x;
+    knob2Y = top + height / 2 - slider2XY.y;
+
+    let isClicked = false;
+    canvas.addEventListener("pointerdown", () => (isClicked = true));
+    canvas.addEventListener("pointerup", () => (isClicked = false));
+
+    canvas.addEventListener("pointermove", (event) => {
+      if (isClicked) {
+        const rect = canvas.getBoundingClientRect();
+        const x = event.clientX - rect.left;
+        const y = event.clientY - rect.top;
+
+        const delY = top + height / 2 - y;
+        const delX = left + width / 2 - x;
+
+        const theta = Math.atan2(-delX, delY);
+
+        let deg = Math.round(theta * (180 / Math.PI));
+
+        if (deg < 0) {
+          deg = deg + 360;
+        }
+
+        if (isPointerOnKnob(x, y, knob1X, knob1Y, knobRadius)) {
+          const rad = deg * (Math.PI / 180);
+
+          chart.data.datasets.forEach((dataset, i) => {
+            const percentVal = Math.round((deg / 360) * 100);
+            setDalalEarningPer(`${percentVal}`);
+          });
+        } else if (isPointerOnKnob(x, y, knob1X, knob1Y, knobRadius)) {
+          const rad = deg * (Math.PI / 180);
+
+          chart.data.datasets.forEach((dataset, i) => {
+            const percentVal = Math.round((deg / 360) * 100);
+            miscFeesEarningPer(`${percentVal}`);
+          });
+        }
+      }
+    });
+  }
+
   return (
     <GraphComponent>
       <div className="graph">
@@ -167,9 +294,9 @@ function Graph({ data }) {
           options={options}
           plugins={[graphLabels]}
           onClick={(e) => {
-            setCord(e);
             if (canvasRef.current) {
-              console.log(cord.x, cord.y);
+              const chart = canvasRef.current;
+              handelClick(chart);
             }
           }}
         />
